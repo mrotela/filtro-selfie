@@ -56,6 +56,7 @@ camera = cv2.VideoCapture(0)
 while True:
     # tomar la pantalla actual
     (grabbed, frame) = camera.read()
+    # flip usamos para que se vea la camara web realmente como selfie
     frame = cv2.flip(frame, 1)
     frame2 = np.copy(frame)
     ## cambiar el color BGR a HSV: el HSV es mejor para la detección de variaciones e intensidades de los colores
@@ -76,8 +77,12 @@ while True:
     cv2.putText(frame, "filtro ON", (512, 330), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 0), 2, cv2.LINE_AA)
     
     # agregar caja roja para activar Keypoints
-    frame = cv2.rectangle(frame, (10,10), (120,65), (0,0,255), -1)          
-    cv2.putText(frame, "Keypoints", (22, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA) 
+    if activarKeyPoints:
+        frame = cv2.rectangle(frame, (10,10), (120,65), (0,255,0), -1)          
+        cv2.putText(frame, "Keypoints ON", (22, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA) 
+    else:
+        frame = cv2.rectangle(frame, (10,10), (120,65), (0,0,255), -1)          
+        cv2.putText(frame, "Keypoints OFF", (22, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA) 
     
     ###########################################################################
     ## establecer tipoFiltro de acuerdo al index
@@ -86,11 +91,10 @@ while True:
     # tipoFiltro = 3 --> para los ojos en forma individual
     if filterIndex == 0 or filterIndex == 1 or filterIndex == 2:
         tipoFiltro = 1
+    elif filterIndex == 3 or filterIndex == 4:
+        tipoFiltro = 2
     else:
-        if filterIndex == 3 or filterIndex == 4:
-            tipoFiltro = 2
-        else:
-            tipoFiltro = 3    
+        tipoFiltro = 3    
     ###########################################################################
 
     # detectar rostros
@@ -218,7 +222,7 @@ while True:
         # encontrar el radio de los contornos 
         ((x, y), radius) = cv2.minEnclosingCircle(cntRojo)
         # encontrar los contornos, en este caso como un circulo
-        cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+        cv2.circle(frame, (int(x), int(y)), int(radius), (0, 0, 255), 2)
         # obtener moments para conseguir el centro del objeto (circulo)
         M3 = cv2.moments(cntRojo)
         if M3['m00'] != 0:
@@ -226,8 +230,11 @@ while True:
         
             # se establecen los límites de los pixeles de la caja rojo
             # en caso que el xy del objeto rojo entre dentro de caja, se realizan las acciones
-            if 10 <= centerRojo[0] <= 120 and 30 <= centerRojo[1] <= 100:               
-                activarKeyPoints = True
+            if 10 <= centerRojo[0] <= 120 and 30 <= centerRojo[1] <= 100:  
+                if activarKeyPoints:
+                    activarKeyPoints = False
+                else:
+                    activarKeyPoints = True
                 continue
             
     # dibujar el contorno del objeto identificado        
@@ -277,10 +284,10 @@ while True:
             sunglass_height = int((points[10][1]-points[8][1])/1.1)
             sunglass_resized = cv2.resize(sunglasses, (sunglass_width, sunglass_height), interpolation = cv2.INTER_CUBIC)
             transparent_region = sunglass_resized[:,:,:3] != 0
+            # [start:end:step]
             face_resized_color[int(points[9][1]):int(points[9][1])+sunglass_height, int(points[9][0]):int(points[9][0])+sunglass_width,:][transparent_region] = sunglass_resized[:,:,:3][transparent_region]
-        else:
-            if tipoFiltro == 2:
-                # agregar el filtro (lentes o similares)
+        elif tipoFiltro == 2:
+            # agregar el filtro (lentes o similares)
 #                sunglasses = cv2.imread(filters[filterIndex], cv2.IMREAD_UNCHANGED)
 #                sunglass_width = int((points[7][0]-points[9][0])*1.1)
 #                sunglass_height = int((points[14][1]-points[8][1])/1.1)       
@@ -288,41 +295,29 @@ while True:
 #                transparent_region = sunglass_resized[:,:,:3] != 0
 #                face_resized_color[int(points[9][1]):int(points[9][1])+sunglass_height, int(points[9][0]):int(points[9][0])+sunglass_width,:][transparent_region] = sunglass_resized[:,:,:3][transparent_region]
 #                
-                sunglasses = cv2.imread(filters[filterIndex], cv2.IMREAD_UNCHANGED)
-                sunglass_width = int((points[6][0]-points[9][0])*1.6)
-                sunglass_height = int((points[14][1]-points[9][1])*1.1)     
-                sunglass_resized = cv2.resize(sunglasses, (sunglass_width, sunglass_height), interpolation = cv2.INTER_CUBIC)
-                transparent_region = sunglass_resized[:,:,:3] != 0
-                face_resized_color[int(points[9][1]):int(points[9][1])+sunglass_height, int(points[9][0]):int(points[9][0])+sunglass_width,:][transparent_region] = sunglass_resized[:,:,:3][transparent_region]
-            else:
-                ##########################################################################################################
-                #### aplicar filtro solo en los ojos                 
-                filtro_ojo = cv2.imread(filters[filterIndex], cv2.IMREAD_UNCHANGED)
-                filtro_ojo_ancho = int((points[3][0]-points[2][0])*2.1)
-                filtro_ojo_alto = int((points[2][1]-points[6][1])*2.1)          
-                filtro_ojo_resized = cv2.resize(filtro_ojo, (filtro_ojo_ancho, filtro_ojo_alto), interpolation = cv2.INTER_CUBIC)
-                transparent_region = filtro_ojo_resized[:,:,:3] != 0
-                # superponer imagen original con el filtro en el ojo derecho
-                # el point 6 es el inicio de la ceja derecha
-                face_resized_color3[int(points[6][1]):int(points[6][1])+filtro_ojo_alto, int(points[6][0]):int(points[6][0])+filtro_ojo_ancho,:][transparent_region] = filtro_ojo_resized[:,:,:3][transparent_region]
-                frame[y:y+h, x:x+w] = cv2.resize(face_resized_color3, original_shape, interpolation = cv2.INTER_CUBIC)
-                # superponer imagen original con el filtro en el ojo derecho + el filtro en el ojo izquierdo
-                # el point 9 es el inicio de la ceja izquierda
-                face_resized_color3[int(points[9][1]):int(points[9][1])+filtro_ojo_alto, int(points[9][0]):int(points[9][0])+filtro_ojo_ancho,:][transparent_region] = filtro_ojo_resized[:,:,:3][transparent_region]
-               
-                ##########################################################################################################  
-
-
-            
-        # en caso que el filtro este activado, vemos si el filtro es por ojo o por cara
-        if quitarFiltro is False:
-            if filterIndex == 5:
-                 frame[y:y+h, x:x+w] = cv2.resize(face_resized_color3, original_shape, interpolation = cv2.INTER_CUBIC)
-            else:
-                frame[y:y+h, x:x+w] = cv2.resize(face_resized_color, original_shape, interpolation = cv2.INTER_CUBIC)
-        # si quitar filtro está activo entonces establecemos nuestro frame sin filtro
+            sunglasses = cv2.imread(filters[filterIndex], cv2.IMREAD_UNCHANGED)
+            sunglass_width = int((points[6][0]-points[9][0])*1.6)
+            sunglass_height = int((points[14][1]-points[9][1])*1.1)     
+            sunglass_resized = cv2.resize(sunglasses, (sunglass_width, sunglass_height), interpolation = cv2.INTER_CUBIC)
+            transparent_region = sunglass_resized[:,:,:3] != 0
+            face_resized_color[int(points[9][1]):int(points[9][1])+sunglass_height, int(points[9][0]):int(points[9][0])+sunglass_width,:][transparent_region] = sunglass_resized[:,:,:3][transparent_region]
         else:
-            frame[y:y+h, x:x+w] = cv2.resize(face_resized_color_sin_filtro, original_shape, interpolation = cv2.INTER_CUBIC)
+            ##########################################################################################################
+            #### aplicar filtro solo en los ojos                 
+            filtro_ojo = cv2.imread(filters[filterIndex], cv2.IMREAD_UNCHANGED)
+            filtro_ojo_ancho = int((points[3][0]-points[2][0])*2.1)
+            filtro_ojo_alto = int((points[2][1]-points[6][1])*2.1)          
+            filtro_ojo_resized = cv2.resize(filtro_ojo, (filtro_ojo_ancho, filtro_ojo_alto), interpolation = cv2.INTER_CUBIC)
+            transparent_region = filtro_ojo_resized[:,:,:3] != 0
+            # superponer imagen original con el filtro en el ojo derecho
+            # el point 6 es el inicio de la ceja derecha
+            face_resized_color3[int(points[6][1]):int(points[6][1])+filtro_ojo_alto, int(points[6][0]):int(points[6][0])+filtro_ojo_ancho,:][transparent_region] = filtro_ojo_resized[:,:,:3][transparent_region]
+            frame[y:y+h, x:x+w] = cv2.resize(face_resized_color3, original_shape, interpolation = cv2.INTER_CUBIC)
+            # superponer imagen original con el filtro en el ojo derecho + el filtro en el ojo izquierdo
+            # el point 9 es el inicio de la ceja izquierda
+            face_resized_color3[int(points[9][1]):int(points[9][1])+filtro_ojo_alto, int(points[9][0]):int(points[9][0])+filtro_ojo_ancho,:][transparent_region] = filtro_ojo_resized[:,:,:3][transparent_region]
+           
+            ##########################################################################################################       
             
         # agregar los keypoints al frame2
         for keypoint in points:
@@ -342,8 +337,22 @@ while True:
         #if pointOjoDerecho:
         #    cv2.circle(face_resized_color2, pointOjoDerecho, 1, (0,0,255), 5) 
         
-        # obtenemos el frame sin filtro + Keypoints del rostro
-        frame2[y:y+h, x:x+w] = cv2.resize(face_resized_color_sin_filtro, original_shape, interpolation = cv2.INTER_CUBIC)
+       
+        
+        # en caso que el Keypoint este activo, solo se mostrarán los Keypoint
+        ## sino se mostrarán los filtros
+        if activarKeyPoints:
+             # obtenemos el frame sin filtro + Keypoints del rostro
+             frame[y:y+h, x:x+w] = cv2.resize(face_resized_color_sin_filtro, original_shape, interpolation = cv2.INTER_CUBIC)
+        elif quitarFiltro is False:
+            # en caso que el filtro este activado, vemos si el filtro es por ojo o por cara           
+            if filterIndex == 5:
+                 frame[y:y+h, x:x+w] = cv2.resize(face_resized_color3, original_shape, interpolation = cv2.INTER_CUBIC)
+            else:
+                frame[y:y+h, x:x+w] = cv2.resize(face_resized_color, original_shape, interpolation = cv2.INTER_CUBIC)
+        # si quitar filtro está activo entonces establecemos nuestro frame sin filtro
+        else:
+            frame[y:y+h, x:x+w] = cv2.resize(face_resized_color_sin_filtro, original_shape, interpolation = cv2.INTER_CUBIC)
 
         # mostrar los frames
         cv2.imshow("Filtro de selfie", frame)
